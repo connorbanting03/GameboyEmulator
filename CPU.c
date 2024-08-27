@@ -1,6 +1,8 @@
 #include <stdint.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include "CPU.h"
 
 const u_int8_t ZERO_FLAG_BYTE_POSITION  = 7;
 const u_int8_t SUBTRACT_FLAG_BYTE_POSITION = 6;
@@ -8,27 +10,6 @@ const u_int8_t HALF_CARRY_FLAG_BYTE_POSITION = 5;
 const u_int8_t CARRY_FLAG_BYTE_POSITION = 4;
 
 
-typedef struct {
-    u_int8_t a;
-    u_int8_t b;
-    u_int8_t c;
-    u_int8_t d;
-    u_int8_t e;
-    u_int8_t f;
-    u_int8_t h;
-    u_int8_t l;
-
-
-} Registers;
-
-typedef struct {
-    bool zero;
-    bool subtract;
-    bool half_carry;
-    bool carry;
-} FlagsRegister;
-
-// Registar manipulation
 u_int16_t get_bc(const Registers *r){
     return (u_int16_t)r -> b << 8 | r -> c; 
 }
@@ -56,32 +37,19 @@ FlagsRegister uint8_to_FlagsRegister(uint8_t byte) {
     return flag;
 }
 
-typedef enum {
-  A, 
-  B, 
-  C, 
-  D, 
-  E, 
-  H, 
-  L
-} ArithmeticTarget;
 
-typedef enum {
-    ADD
-} InstructionType;
 
-typedef struct {
-    InstructionType type;
-    ArithmeticTarget target;
-} Instruction;
+
+
 
 
 void execute(Registers *r, Instruction instr){
     switch (instr.type) {
         case ADD:
             switch (instr.target) {
-                case C:
-                    uint8_t* overflow;
+                case C: {
+                    uint8_t *overflow = (uint8_t*)malloc(sizeof(u_int8_t));
+                    *overflow = 0;
                     int value = r->c;
                     int newValue = add(r, value, overflow);
                     r->a = newValue;
@@ -89,6 +57,7 @@ void execute(Registers *r, Instruction instr){
                 default:
                     printf("Target not supported yet\n");
                     break;
+            }
             }
             break;
         // Add cases for other instruction types as needed
@@ -99,15 +68,39 @@ void execute(Registers *r, Instruction instr){
 }
 
 uint8_t add(Registers *reg, uint8_t value, uint8_t *did_overflow) {
-    uint16_t result = (uint16_t)reg->a + (uint16_t)value; // Promote to uint16_t to detect overflow
-    *did_overflow = (result > 255); // Check if the result exceeds the max value of uint8_t
 
-    reg->a = (uint8_t)result; // Store only the lower 8 bits back into the register
+    //Variables Defined for setting half carry flag      
+    uint8_t lower_nibble_a = reg->a & 0xF;
+    uint8_t lower_nibble_value = value & 0xF;
 
-    // TODO: Set flags based on the operation result, e.g., zero flag, carry flag, etc.
-    return reg->a; // Return the new value of 'a'
+    uint16_t result = (uint16_t)reg->a + (uint16_t)value; 
+    *did_overflow = (result > 255);
+
+    reg->a = (uint8_t)result;
+    
+
+    FlagsRegister flags = uint8_to_FlagsRegister(reg->f);
+
+    flags.zero = (reg->a == 0);
+
+    flags.subtract = 0;
+
+    flags.carry = *did_overflow;
+    
+
+    uint8_t sum_lower_nibbles = lower_nibble_a + lower_nibble_value;
+
+    printf("reg.a (lower nibble): 0x%X\n", lower_nibble_a);
+    printf("value (lower nibble): 0x%X\n", lower_nibble_value);
+    printf("Sum of lower nibbles: 0x%X\n", sum_lower_nibbles);
+    printf("Comparing sum of lower nibbles to 0xF: %s\n", sum_lower_nibbles > 0xF ? "true" : "false");
+
+
+
+    flags.half_carry = ((lower_nibble_a) + (lower_nibble_value)) > 0xF;
+
+    reg->f = FlagsRegister_to_uint8(flags);
+
+    return reg->a; 
 }
 
-int main(){
-    return 0;
-}
